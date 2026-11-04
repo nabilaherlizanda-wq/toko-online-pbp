@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beli</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+</head>
+<body>
+  <nav><a href="index.html">Halaman Pembeli</a> <a href="admin.html">Halaman Admin</a></nav>
+  <p id="toko"></p>
+  <h1>Beli</h1>
+
+  <select id="pilih"></select>
+  <input id="jumlah" type="number" min="1" value="1" placeholder="Jumlah">
+  <button id="btnBeli">Beli</button>
+
+  <p id="detail"></p>
+  <p id="pesan" role="status"></p>
+
+<script>
+document.getElementById('toko').textContent = NAMA_TOKO;
+document.title = 'Beli - ' + NAMA_TOKO;
+
+const API = '/api/barang';
+const $ = id => document.getElementById(id);
+const rp = n => 'Rp ' + Number(n).toLocaleString('id-ID');
+let daftar = [];
+
+// 1. GET /api/barang -> isi dropdown
+async function muatData() {
+  const res = await fetch(API);
+  if (!res.ok) throw new Error('Gagal mengambil data');
+  daftar = await res.json();
+
+  const dipilih = $('pilih').value;
+  $('pilih').replaceChildren();
+  daftar.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.kode;
+    opt.textContent = b.nama;
+    $('pilih').appendChild(opt);
+  });
+  if (dipilih) $('pilih').value = dipilih;
+  tampilDetail();
+}
+
+function tampilDetail() {
+  const b = daftar.find(x => x.kode === $('pilih').value);
+  $('detail').textContent = b ? 'Harga: ' + rp(b.harga) + ' | Stok: ' + b.stok : '';
+}
+
+async function beli() {
+  try {
+    const jumlah = parseInt($('jumlah').value, 10);
+    if (!Number.isInteger(jumlah) || jumlah < 1) throw new Error('Jumlah tidak valid');
+
+    // Ambil data terbaru dulu (GET), lalu cek stoknya
+    await muatData();
+    const b = daftar.find(x => x.kode === $('pilih').value);
+    if (!b) throw new Error('Barang tidak ditemukan');
+    if (b.stok < jumlah) throw new Error('Stok tidak cukup (sisa ' + b.stok + ')');
+
+    // 2. Hitung stok baru, lalu PUT /api/barang/:id
+    const stokBaru = b.stok - jumlah;
+    const res = await fetch(API + '/' + encodeURIComponent(b.kode), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nama: b.nama, harga: b.harga, stok: stokBaru })
+    });
+    if (!res.ok) throw new Error('Transaksi gagal');
+
+    $('pesan').textContent = 'Berhasil membeli ' + jumlah + ' ' + b.nama +
+      ' = ' + rp(b.harga * jumlah) + ' (sisa stok ' + stokBaru + ')';
+    await muatData();
+  } catch (e) { $('pesan').textContent = e.message; }
+}
+
+$('pilih').addEventListener('change', tampilDetail);
+$('btnBeli').addEventListener('click', beli);
+muatData().catch(e => $('pesan').textContent = e.message);
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Toko</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+</head>
+<body>
+  <nav><a href="index.html">Halaman Pembeli</a> <a href="admin.html">Halaman Admin</a></nav>
+  <h1 id="judul"></h1>
+  <h2>Kelola Produk</h2>
+
+  <form id="formProduk">
+    <input id="kode" placeholder="Kode Produk" required>
+    <input id="nama" placeholder="Nama Produk" required>
+    <input id="harga" type="number" min="0" placeholder="Harga" required>
+    <input id="stok" type="number" min="0" placeholder="Stok" required>
+    <button type="submit" id="btnSimpan">Simpan</button>
+    <button type="button" id="btnBatal">Batal</button>
+  </form>
+
+  <table>
+    <thead><tr><th>Kode</th><th>Nama</th><th>Harga</th><th>Stok</th><th>Aksi</th></tr></thead>
+    <tbody id="dataProduk"></tbody>
+  </table>
+  <p id="pesan" role="status"></p>
+
+<script>
+document.getElementById('judul').textContent = NAMA_TOKO + ' - Admin';
+document.title = 'Admin ' + NAMA_TOKO;
+
+const API = '/api/barang';
+const $ = id => document.getElementById(id);
+let kodeEdit = null;
+const form = $('formProduk'), tabel = $('dataProduk'), pesan = $('pesan');
+const rp = n => 'Rp ' + Number(n).toLocaleString('id-ID');
+const tampilPesan = t => pesan.textContent = t;
+
+async function muatData() {
+  try {
+    const res = await fetch(API);
+    if (!res.ok) throw new Error('Gagal mengambil data');
+    tampilkanTabel(await res.json());
+  } catch (e) { tampilPesan(e.message); }
+}
+
+function tampilkanTabel(data) {
+  tabel.replaceChildren();
+  data.forEach(p => {
+    const tr = document.createElement('tr');
+    [p.kode, p.nama, rp(p.harga), p.stok].forEach(v => {
+      const td = document.createElement('td');
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    const aksi = document.createElement('td');
+    const edit = document.createElement('button');
+    edit.textContent = 'Edit';
+    edit.onclick = () => mulaiEdit(p);
+    const hapus = document.createElement('button');
+    hapus.textContent = 'Hapus';
+    hapus.onclick = () => hapusData(p.kode);
+    aksi.append(edit, hapus);
+    tr.appendChild(aksi);
+    tabel.appendChild(tr);
+  });
+}
+
+async function simpanData(data) {
+  try {
+    const url = kodeEdit ? API + '/' + encodeURIComponent(kodeEdit) : API;
+    const res = await fetch(url, {
+      method: kodeEdit ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const hasil = await res.json();
+    if (!res.ok) throw new Error(hasil.pesan || 'Gagal menyimpan data');
+    batalEdit();
+    await muatData();
+    tampilPesan('Data berhasil disimpan');
+  } catch (e) { tampilPesan(e.message); }
+}
+
+function mulaiEdit(p) {
+  kodeEdit = p.kode;
+  $('kode').value = p.kode; $('kode').disabled = true;
+  $('nama').value = p.nama;
+  $('harga').value = p.harga;
+  $('stok').value = p.stok;
+  $('btnSimpan').textContent = 'Perbarui';
+}
+
+function batalEdit() {
+  kodeEdit = null;
+  form.reset();
+  $('kode').disabled = false;
+  $('btnSimpan').textContent = 'Simpan';
+}
+
+async function hapusData(kode) {
+  if (!confirm('Hapus produk ' + kode + '?')) return;
+  try {
+    const res = await fetch(API + '/' + encodeURIComponent(kode), { method: 'DELETE' });
+    if (!res.ok) throw new Error('Gagal menghapus');
+    if (kodeEdit === kode) batalEdit();
+    await muatData();
+    tampilPesan('Data berhasil dihapus');
+  } catch (e) { tampilPesan(e.message); }
+}
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  await simpanData({
+    kode: $('kode').value.trim(),
+    nama: $('nama').value.trim(),
+    harga: Number($('harga').value),
+    stok: Number($('stok').value)
+  });
+});
+$('btnBatal').addEventListener('click', batalEdit);
+muatData();
+</script>
+</body>
+</html>
